@@ -1,13 +1,6 @@
-# 💻 SAML Code Examples
-
-## 🟢 C# / .NET 8 (Backend)
-
-SAML is complex. **Do not write your own SAML parser.** Use a library like `ITfoxtec.Identity.Saml2` or `ComponentSpace` (Commercial).
-
-### 1. Configuration (ITfoxtec.Identity.Saml2)
-
-```csharp
+// Requires library: ITfoxtec.Identity.Saml2
 // Program.cs
+/*
 builder.Services.Configure<Saml2Configuration>(builder.Configuration.GetSection("Saml2"));
 
 builder.Services.AddSaml2(options =>
@@ -46,15 +39,4 @@ app.MapPost("/acs", async (HttpRequest request, Saml2Configuration config) =>
     // Issue app cookie or JWT
     return Results.Ok("Logged in!");
 });
-```
-
-## 🔴 Angular (Frontend)
-
-SAML is a **Browser Redirect** flow (like OAuth 2.0 but with XML POSTs). Angular usually doesn't handle the core logic, it just kicks off the navigation.
-
-```typescript
-login() {
-  // Redirect to Backend Login endpoint which constructs SAML Request
-  window.location.href = '/api/auth/login';
-}
-```
+*/
