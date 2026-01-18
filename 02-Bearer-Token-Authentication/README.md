@@ -1,41 +1,44 @@
 # 2️⃣ Bearer Token Authentication
 
-Bearer Token Authentication is one of the most common methods used in modern web APIs. The term "Bearer" implies that "give access to the bearer of this token."
+Bearer Authentication (also called token authentication) is an HTTP authentication scheme that involves security tokens called bearer tokens. The name "Bearer" means that anybody who *bears* this token can use it to access resources.
 
-## 🔹 How it works
+## 🔹 Sequence Diagram
 
-The client sends a token in the HTTP Authorization header.
-
-### Header Format
-```http
-Authorization: Bearer <token>
+```mermaid
+sequenceDiagram
+    participant User
+    participant App
+    participant AuthServer
+    participant API
+    
+    User->>App: Login Credentials
+    App->>AuthServer: Authenticate(u/p)
+    AuthServer-->>App: Return Bearer Token (JWT/Opaque)
+    Note over App: Store token (Securely)
+    App->>API: Resource Request + Authorization: Bearer <token>
+    API->>API: Validate Token
+    API-->>App: 200 OK (Data)
 ```
 
-### Token Types
-The token can be:
-- **Random string:** An opaque string stored in a database (reference token).
-- **JWT (JSON Web Token):** A self-contained token with data (stateless).
-- **OAuth access token:** A token issued by an Authorization Server.
+## 🔹 Key Concepts
+The client sends the token in the `Authorization` header:
+`Authorization: Bearer <token>`
 
-## 🔹 Flow
+## 🔹 Common Pitfalls ❌
+- **Token Theft**: If the token is stolen (XSS), the attacker has full access until it expires.
+- **CSRF vs XSS**: Storing tokens in `localStorage` makes them vulnerable to XSS. Storing in `HttpOnly` cookies protects against XSS but requires CSRF protection.
+- **Statelessness Risk**: Hard to revoke a token server-side if it's stateless (JWT) without additional blacklisting logic.
 
-1. **Login:** The user sends credentials (username/password) to the server.
-2. **Issue Token:** The server validates credentials and issues a "Bearer Token" back to the client.
-3. **Store Token:** The client stores this token (e.g., in localStorage, cookie, or secure storage).
-4. **Send Token:** For subsequent requests, the client sends the token in the `Authorization` header.
-5. **Validate:** The server validates the token and grants access.
+## 🔹 Industry Best Practices ✅
+1. **Short Expiry**: Keep access tokens short-lived (5-15 mins).
+2. **Refresh Tokens**: Use refresh tokens to get new access tokens without re-prompting the user.
+3. **Strict Transports**: Only send tokens over HTTPS.
+4. **Validation**: Always validate the token on every request, either locally (JWT) or via introspection (Opaque).
 
-## 🔹 Pros
-- **No password per request:** Credentials are only sent once during login.
-- **Stateless possible:** If using JWTs, the server doesn't need to check the database for every request.
-- **API-friendly:** Works perfectly for REST APIs and mobile backends.
-
-## 🔹 Cons
-- **Token theft = full access:** If an attacker steals the token, they can impersonate the user until the token expires.
-- **Needs HTTPS:** Essential to prevents token interception.
-- **Token expiration handling needed:** Clients must implement logic to handle expired tokens (often using Refresh Tokens).
-
-## 🔹 Use cases
-- **REST APIs:** The standard for securing API endpoints.
-- **Mobile apps:** Native iOS and Android applications.
-- **SPA (Single Page Applications):** Angular, React, Vue, etc.
+## 🔹 Interview Tips 💡
+- **Q: What happens if a Bearer token is intercepted?**
+  - A: The attacker can gain full access to the user's resources. This is why TLS and short expiration times are critical.
+- **Q: Is a Bearer token always a JWT?**
+  - A: No. It can be a random "Opaque" string that the server looks up in a database (reference token).
+- **Q: How does Bearer Auth differ from Basic Auth?**
+  - A: Basic Auth sends the user's secret (password) with every request. Bearer Auth sends a temporary, revocable security token.

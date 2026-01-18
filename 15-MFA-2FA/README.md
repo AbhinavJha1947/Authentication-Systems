@@ -1,39 +1,53 @@
 # 1️⃣5️⃣ MFA / 2FA (Multi-Factor Authentication)
 
-**Authentication Factors:** To prove who you are, valid authentication requires more than one evidence from different categories.
+MFA adds an extra layer of security by requiring two or more independent factors for authentication.
 
-## 🔹 The 3 Main Factors
-1. **Something you KNOW:** Password, PIN, Security Question.
-2. **Something you HAVE:** Phone (SMS/App), Hardware Key (YubiKey), Smart Card.
-3. **Something you ARE:** Fingerprint, FaceID, Iris scan.
+## 🔹 Knowledge, Possession, Inherence
+1.  **Knowledge**: Something you **know** (Password, PIN).
+2.  **Possession**: Something you **have** (Phone, Hardware Key, Email).
+3.  **Inherence**: Something you **are** (Fingerprint, FaceID).
 
-> **2FA (Two-Factor Auth):** Using exactly two different factors (e.g., Password + SMS Code).
-> **MFA (Multi-Factor Auth):** Using two or more factors.
+## 🔹 Sequence Diagram (TOTP Flow)
 
-> [!NOTE]
-> Using two passwords is NOT 2FA. That is just two of "Something you know".
+```mermaid
+sequenceDiagram
+    participant User
+    participant App
+    participant Phone as Auth App (Google Auth)
+    participant Server
+    
+    User->>App: Login with Password
+    App->>Server: Verify Password
+    Server-->>App: Password OK. Need MFA.
+    
+    Note over User,Phone: User opens app, sees code '123 456'
+    User->>App: Enter OTP (123456)
+    App->>Server: POST /verify-otp
+    Server->>Server: Generate current TOTP locally
+    Server->>Server: Compare both codes
+    Server-->>App: 200 OK (Full Session)
+```
 
-## 🔹 Common Methods
+## 🔹 MFA Methods
+- **TOTP**: Time-based One-Time Password (App-based). Best for offline use.
+- **SMS/Email**: Easy but vulnerable to interception/SIM swapping.
+- **Push**: One-tap approval (e.g., Microsoft Authenticator). Excellent UX.
 
-### 1. SMS / Email OTP
-- **Pros:** Ubiquitous, easy to understand.
-- **Cons:** Vulnerable to SIM Swapping and phishing.
+## 🔹 Common Pitfalls ❌
+- **No Backup Codes**: If a user loses their phone, they are locked out forever.
+- **Window of Acceptance**: TOTP should allow a small window (e.g., +/- 30 seconds) to account for clock drift.
+- **Reuse**: OTP codes must be one-time use. Even if it's still within the 30-second window, it should be invalidated after the first use.
 
-### 2. Authenticator Apps (TOTP)
-- **Examples:** Google Authenticator, Microsoft Authenticator, Authy.
-- **Tech:** Time-based One-Time Password (TOTP). Generating a 6-digit code offline based on a shared secret and the current time.
-- **Pros:** More secure than SMS, works offline.
-- **Cons:** User needs a smartphone.
+## 🔹 Industry Best Practices ✅
+1.  **WebAuthn for MFA**: Use Biometrics as the second factor for the highest security.
+2.  **Rate Limiting**: Aggressively rate limit OTP attempts to prevent brute-forcing.
+3.  **Trust Device**: Allow users to "Trust this browser" for 30 days to reduce friction while keeping security high.
 
-### 3. Push Notifications
-- **Flow:** User enters password → Phone pops up "Are you trying to sign in?" → User taps "Approve".
-- **Pros:** Best UX.
-- **Cons:** "MFA Fatigue" (User blindly approving request just to stop the buzzing).
-
-### 4. Hardware Security Keys (U2F / FIDO2)
-- **Examples:** YubiKey, Titan Key.
-- **Pros:** Phishing-resistant. Highest security standard.
-- **Cons:** Cost ($) and physical logistics (plugging it in).
-
-## 🔹 Use cases
-- **Everywhere:** It is now a standard recommendation for ALL accounts (Social Media, Banking, Email, Enterprise).
+## 🔹 Interview Tips 💡
+- **Q: What does the "T" in TOTP stand for?**
+  - A: **Time-based**. It uses the current UNIX timestamp and a shared secret to calculate the 6-digit code.
+- **Q: Why is SMS considered "weak" MFA?**
+  - A: SMS messages are not encrypted and can be intercepted by hackers or through "SIM swapping" where an attacker convinces a telco to move the user's number to a new card.
+- **Q: How does a TOTP app work without internet?**
+  - A: Because the code is based on a **Shared Secret** (exchanged during setup) and the **Current Time**. As long as both the phone and server have the correct time, they will calculate the same code.
+Lines: 55

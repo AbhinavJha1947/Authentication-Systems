@@ -4,47 +4,56 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddAuthentication("MyCookieAuth")
-    .AddCookie("MyCookieAuth", options =>
+// --- SESSION CONFIGURATION ---
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
     {
-        options.Cookie.Name = "MyAppSession";
-        options.LoginPath = "/login";
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
-        options.SlidingExpiration = true; // Renew cookie if active
+        options.Cookie.Name = "MyAuthSession";
+        options.Cookie.HttpOnly = true;     // Prevents XSS
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Requires HTTPS
+        options.Cookie.SameSite = SameSiteMode.Strict; // Prevents CSRF
+        
+        options.LoginPath = "/api/auth/login";
+        options.AccessDeniedPath = "/api/auth/forbidden";
+        
+        options.ExpireTimeSpan = TimeSpan.FromHours(2);
+        options.SlidingExpiration = true; // Refresh session window on activity
     });
+
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Login Endpoint
-app.MapPost("/login", async (HttpContext context, LoginModel model) =>
+// --- LOGIN ---
+app.MapPost("/api/auth/login", async (HttpContext context, LoginReq req) =>
 {
-    if (model.Username == "admin" && model.Password == "password")
-    {
-        var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.Name, model.Username),
-            new Claim(ClaimTypes.Role, "Admin")
-        };
+    if (req.Username != "bob" || req.Password != "password")
+        return Results.Unauthorized();
 
-        var claimsIdentity = new ClaimsIdentity(claims, "MyCookieAuth");
+    var claims = new[] { 
+        new Claim(ClaimTypes.Name, "Bob"),
+        new Claim(ClaimTypes.Role, "Manager")
+    };
+    
+    var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+    var principal = new ClaimsPrincipal(identity);
 
-        await context.SignInAsync("MyCookieAuth", new ClaimsPrincipal(claimsIdentity));
-        
-        return Results.Ok();
-    }
-    return Results.Unauthorized();
+    // This creates the session and sends the "Set-Cookie" header
+    await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+
+    return Results.Ok(new { Message = "Session Created" });
 });
 
-// Logout Endpoint
-app.MapPost("/logout", async (HttpContext context) =>
+// --- LOGOUT ---
+app.MapPost("/api/auth/logout", async (HttpContext context) =>
 {
-    await context.SignOutAsync("MyCookieAuth");
-    return Results.Ok();
+    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    return Results.Ok(new { Message = "Session Destroyed" });
 });
 
 app.Run();
 
-public record LoginModel(string Username, string Password);
+public record LoginReq(string Username, string Password);

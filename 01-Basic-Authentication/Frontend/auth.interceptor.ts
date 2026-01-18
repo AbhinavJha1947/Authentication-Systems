@@ -1,18 +1,31 @@
-// auth.interceptor.ts
-import { HttpInterceptorFn } from '@angular/common/http';
+import { HttpInterceptorFn, HttpRequest, HttpHandlerFn, HttpEvent } from '@angular/common/http';
+import { Observable } from 'rxjs';
 
-export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const username = 'admin';
-  const password = 'password123';
-  
-  // Create Base64 string
-  const token = btoa(`${username}:${password}`);
+/**
+ * Basic Authentication Interceptor.
+ * Automatically attaches the Base64 encoded 'username:password' to every outgoing request.
+ */
+export const basicAuthInterceptor: HttpInterceptorFn = (
+  req: HttpRequest<unknown>,
+  next: HttpHandlerFn
+): Observable<HttpEvent<unknown>> => {
 
-  const authReq = req.clone({
+  // 1. In a real scenario, these would come from an AuthService or environment
+  const credentials = {
+    username: 'admin',
+    password: 'password123'
+  };
+
+  // 2. Encode to Base64 (Standard browser API)
+  const authToken = btoa(`${credentials.username}:${credentials.password}`);
+
+  // 3. Clone request and add Header
+  const authenticatedRequest = req.clone({
     setHeaders: {
-      Authorization: `Basic ${token}`
+      Authorization: `Basic ${authToken}`,
+      'X-Requested-With': 'XMLHttpRequest' // Helps identify AJAX requests
     }
   });
 
-  return next(authReq);
+  return next(authenticatedRequest);
 };

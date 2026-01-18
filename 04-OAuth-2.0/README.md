@@ -1,42 +1,48 @@
 # 4️⃣ OAuth 2.0 (Authorization Framework)
 
-> [!IMPORTANT]
-> **OAuth is NOT authentication by itself.** It is a framework for **delegated authorization**.
-> It answers the question: "Can this application access these resources on behalf of this user?"
+OAuth 2.0 is the industry-standard protocol for **authorization**. It focuses on client developer simplicity while providing specific authorization flows for web applications, desktop applications, mobile phones, and living room devices.
 
-## 🔹 Example
-"Allow **Google** to access my **GitHub repos**?"
-"Log in with **Facebook**" (using OAuth for identity, often coupled with OIDC).
+## 🔹 Sequence Diagram (Authorization Code Flow)
 
-## 🔹 Main Roles
-1. **Resource Owner:** The User (You).
-2. **Client:** The Application trying to access the account (e.g., A smart TV app).
-3. **Authorization Server:** The Server validating credentials and issuing tokens (e.g., Google Auth Server).
-4. **Resource Server:** The API hosting the user's data (e.g., Google Drive API, Gmail API).
+```mermaid
+sequenceDiagram
+    participant User
+    participant App as Client (SPA/Mobile)
+    participant Auth as Auth Server (Google/Okta)
+    participant API as Resource Server
+    
+    User->>App: Click "Sign in with Google"
+    App->>Auth: Redirect to Login Page
+    User->>Auth: Enter Credentials & Consent
+    Auth-->>App: Redirect back with Auth Code
+    App->>Auth: Exchange Code for Access Token
+    Auth-->>App: Return Access Token (+ Refresh Token)
+    App->>API: Request Data + Header: Bearer <token>
+    API->>API: Verify Token
+    API-->>App: 200 OK (Resource)
+```
 
-## 🔹 Grant Types (Flows)
+## 🔹 Core Roles
+1.  **Resource Owner**: The User who owns the data.
+2.  **Resource Server**: The API hosting the data.
+3.  **Client**: The App requesting access to the data.
+4.  **Authorization Server**: The Server issuing tokens (Google, IdentityServer, etc.).
 
-| Grant Type | Use Case | Description |
-| :--- | :--- | :--- |
-| **Authorization Code** | Web apps (Server-side) | The most common and secure flow. Client gets a code, exchanges it for a token. |
-| **PKCE** (Proof Key for Code Exchange) | Mobile / SPA | Extension of Auth Code for public clients (Single Page Apps, Mobile) preventing code interception. |
-| **Client Credentials** | Server-to-server | Machine-to-machine communication where no user is involved. |
-| **Password** (Deprecated) | Legacy | Sending username/password directly. **Avoid**. |
+## 🔹 Common Pitfalls ❌
+- **Exposing Client Secret**: Never put the `client_secret` in a frontend app (SPA/Mobile). Use **PKCE** instead.
+- **Insecure Redirects**: Using wildcard redirect URIs allows attackers to steal auth codes.
+- **Scope Creep**: Requesting more permissions than necessary (`*` scopes).
 
-## 🔹 Tokens
-- **Access Token:** Short-lived token used to access the API.
-- **Refresh Token:** Long-lived token used to get a new Access Token when the old one expires.
+## 🔹 Industry Best Practices ✅
+1.  **Use PKCE**: Proof Key for Code Exchange is mandatory for all modern OAuth flows, even server-side ones.
+2.  **Short-lived Access Tokens**: Use tokens that last only minutes.
+3.  **Rotate Refresh Tokens**: Invalidate old refresh tokens when a new one is issued (Token Rotation).
+4.  **OIDC**: Use OpenID Connect on top of OAuth for identity (authentication).
 
-## 🔹 Pros
-- **Secure:** The client application never sees the user's password.
-- **Industry Standard:** Supported by all major identity providers (Google, Facebook, Microsoft, etc.).
-- **Granular Access:** Scopes allow limiting what the app can do (e.g., "read-only" access).
-
-## 🔹 Cons
-- **Complex:** The flows can be difficult to implementation correctly from scratch.
-- **Configuration Heavy:** Requires registering apps, managing redirects, client secrets, etc.
-
-## 🔹 Use cases
-- **Social Login:** "Sign in with Google/Apple".
-- **Third-party integrations:** Allowing an app to write to your calendar.
-- **Enterprise Auth:** Managing internal access across many apps.
+## 🔹 Interview Tips 💡
+- **Q: Is OAuth 2.0 an Authentication protocol?**
+  - A: No, it's an **Authorization** framework. It grants access but doesn't technically tell you "who" the user is (that's what OIDC is for).
+- **Q: What is PKCE and why is it used?**
+  - A: PKCE prevents "Auth Code Interception" attacks. It uses a code verifier and challenge to ensure the app requesting the token is the same one that started the flow.
+- **Q: What are Scopes?**
+  - A: Scopes define the level of access the client is requesting (e.g., `read:profile`, `write:orders`).

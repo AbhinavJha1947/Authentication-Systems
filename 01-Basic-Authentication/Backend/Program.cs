@@ -4,66 +4,95 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
 
-var builder = WebApplication.CreateBuilder(args);
+namespace AuthSystems.BasicAuth.Backend;
 
-// Register Basic Auth Scheme
-builder.Services.AddAuthentication("BasicAuthentication")
-    .AddScheme<AuthenticationSchemeOptions, BasicAuthenticationHandler>("BasicAuthentication", null);
+/// <summary>
+/// Entry point for Basic Authentication demonstration.
+/// </summary>
+public class Program
+{
+    public static void Main(string[] args)
+    {
+        var builder = WebApplication.CreateBuilder(args);
 
-var app = builder.Build();
+        // 1. Register Custom Authentication Handler
+        builder.Services.AddAuthentication("BasicAuthentication")
+            .AddScheme<AuthenticationSchemeOptions, BasicAuthenticationHandler>("BasicAuthentication", null);
 
-app.UseAuthentication();
-app.UseAuthorization();
+        builder.Services.AddAuthorization();
 
-app.MapGet("/secure-data", () => "This is protected data!")
-    .RequireAuthorization();
+        var app = builder.Build();
 
-app.Run();
+        app.UseAuthentication();
+        app.UseAuthorization();
 
-// ---------------------------------------------------------
-// Handler Implementation
-// ---------------------------------------------------------
+        // Protected Endpoint
+        app.MapGet("/api/secure", () => Results.Ok(new { Message = "Access Granted to Basic Auth Storage!" }))
+           .RequireAuthorization();
+
+        app.Run();
+    }
+}
+
+/// <summary>
+/// Custom Handler to process Basic Auth Header: "Authorization: Basic [Base64]"
+/// </summary>
 public class BasicAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     public BasicAuthenticationHandler(
-        IOptionsMonitor<AuthenticationSchemeOptions> options, 
-        ILoggerFactory logger, 
-        UrlEncoder encoder) 
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
+        ILoggerFactory logger,
+        UrlEncoder encoder)
         : base(options, logger, encoder) { }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        // 1. Check for Authorization Header
         if (!Request.Headers.ContainsKey("Authorization"))
-            return AuthenticateResult.Fail("Missing Authorization Header");
+            return AuthenticateResult.NoResult();
 
         try
         {
             var authHeader = Request.Headers.Authorization.ToString();
-            // Header format: "Basic <base64string>"
-            if(!authHeader.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
-                 return AuthenticateResult.Fail("Invalid Authorization Header");
+            if (!authHeader.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
+                return AuthenticateResult.Fail("Invalid Authorization Scheme");
 
-            var credentialBytes = Convert.FromBase64String(authHeader.Substring(6).Trim());
-            var credentials = Encoding.UTF8.GetString(credentialBytes).Split(':', 2);
-            var username = credentials[0];
-            var password = credentials[1];
+            // 2. Extract and Decode Base64
+            var base64Part = authHeader.Substring("Basic ".Length).Trim();
+            var credentialBytes = Convert.FromBase64String(base64Part);
+            var decodedCredentials = Encoding.UTF8.GetString(credentialBytes).Split(':', 2);
 
-            // TODO: Validate against database
-            if (username == "admin" && password == "password123")
+            if (decodedCredentials.Length != 2)
+                return AuthenticateResult.Fail("Invalid Credentials Format");
+
+            var username = decodedCredentials[0];
+            var password = decodedCredentials[1];
+
+            // 3. Validation Logic (Mocking DB check)
+            if (IsValidUser(username, password))
             {
-                var claims = new[] { new Claim(ClaimTypes.Name, username) };
+                var claims = new[] { 
+                    new Claim(ClaimTypes.Name, username),
+                    new Claim(ClaimTypes.Role, "User") 
+                };
                 var identity = new ClaimsIdentity(claims, Scheme.Name);
                 var principal = new ClaimsPrincipal(identity);
                 var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
                 return AuthenticateResult.Success(ticket);
             }
-            
+
             return AuthenticateResult.Fail("Invalid Username or Password");
         }
-        catch
+        catch (Exception ex)
         {
-            return AuthenticateResult.Fail("Invalid Authorization Header");
+            return AuthenticateResult.Fail($"Error Parsing Credentials: {ex.Message}");
         }
+    }
+
+    private bool IsValidUser(string username, string password)
+    {
+        // Replace with actual Database/Secret check
+        return username == "admin" && password == "password123";
     }
 }

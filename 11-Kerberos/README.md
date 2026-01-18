@@ -1,30 +1,45 @@
-# 1️⃣1️⃣ Kerberos
+# 1️⃣1️⃣ Kerberos (Windows Authentication)
 
-Kerberos is a computer network authentication protocol that works on the basis of tickets to allow nodes communicating over a non-secure network to prove their identity to one another in a secure manner.
+Kerberos is a ticket-based network authentication protocol designed to provide strong authentication for client/server applications by using secret-key cryptography.
 
-## 🔹 Key Component: Windows Active Directory
-It is the default authentication protocol for **Windows Active Directory**.
+## 🔹 Sequence Diagram
 
-## 🔹 How it works (Simplified)
-It relies on a trusted third party called the **Key Distribution Center (KDC)**.
+```mermaid
+sequenceDiagram
+    participant User
+    participant KDC as Key Distribution Center (AD)
+    participant Server as App Server
+    
+    User->>KDC: AS-REQ (Request Ticket Granting Ticket)
+    KDC-->>User: AS-REP (TGT + Session Key)
+    
+    User->>KDC: TGS-REQ (Request Service Ticket for 'Server')
+    KDC-->>User: TGS-REP (Service Ticket)
+    
+    User->>Server: AP-REQ (Present Service Ticket)
+    Server->>Server: Decrypt Ticket with its own key
+    Server-->>User: AP-REP (Mutual Auth Success)
+```
 
-1. **User Login:** User enters password. The client turns this into a key and requests a TGT (Ticket-Granting Ticket) from the KDC.
-2. **TGT Issued:** If the password is correct, KDC sends an encrypted TGT back.
-3. **Service Request:** When the user wants to access a service (e.g., File Share), they send the TGT to the KDC requesting a Service Ticket.
-4. **Service Ticket:** KDC validates TGT and issues a Service Ticket.
-5. **Access:** Client sends the Service Ticket to the File Server. File Server verifies it and grants access.
+## 🔹 Core Components
+1.  **TGT (Ticket Granting Ticket)**: Your "proof of identity" within the domain.
+2.  **Service Ticket**: A ticket specifically for a single resource (e.g., a SQL server or Web app).
+3.  **KDC (Key Distribution Center)**: The trusted third party (usually Active Directory).
 
-## 🔹 Pros
-- **Strong security:** Passwords are never sent over the network (not even encrypted ones).
-- **Mutual Authentication:** Both client and server verify each other.
-- **Single Sign-On (Internal):** Once you log into Windows, you can access file shares, printers, and intranet sites without logging in again.
+## 🔹 Common Pitfalls ❌
+- **SPN Mismatch**: If the Service Principal Name (SPN) is not correctly registered in Active Directory, authentication will fail with cryptic errors.
+- **Time Sync**: Kerberos is extremely sensitive to time. If the client and server clocks differ by more than 5 minutes, it will fail.
+- **Double Hop Problem**: Passing credentials from Web Server A to DB Server B (requires "Constrained Delegation").
 
-## 🔹 Cons
-- **Complex:** Very hard to set up and debug outside of the Windows ecosystem.
-- **Time Synchronization:** Requires all clocks on all machines to be synchronized (NTP) within 5 minutes, or it fails to prevent replay attacks.
-- **Enterprise-only:** Overkill for public web apps.
+## 🔹 Industry Best Practices ✅
+1.  **Use Negotiate**: Use the `Negotiate` scheme in HTTP, which attempts Kerberos and falls back to NTLM only if necessary.
+2.  **Managed Service Accounts (gMSA)**: Use gMSAs for your application pool identities to avoid manual SPN and password management.
+3.  **Modernize**: In web-facing scenarios, wrap Kerberos inside OIDC/SAML via an Identity Provider for better flexibility.
 
-## 🔹 Use cases
-- **Enterprise Corporate Networks:** Windows Domains.
-- **Universities:** Campus networks.
-- **Internal Intranets:** Securing internal resources.
+## 🔹 Interview Tips 💡
+- **Q: Is Kerberos stateless?**
+  - A: No. It creates a "Security Context" for the session, though the tickets themselves carry the identity data.
+- **Q: What is the "Golden Ticket" attack?**
+  - A: It's a critical exploit where an attacker steals the KDC's master key and creates tickets for any user with any level of access.
+- **Q: Why does Kerberos need a timestamp?**
+  - A: To prevent "Replay Attacks" where an attacker captures a ticket and tries to use it later.

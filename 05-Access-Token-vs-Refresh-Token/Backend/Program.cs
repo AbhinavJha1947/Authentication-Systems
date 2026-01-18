@@ -1,43 +1,40 @@
-public class TokenRequest
-{
-    public string AccessToken { get; set; }
-    public string RefreshToken { get; set; }
-}
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
-public class RefreshToken
-{
-    public string Token { get; set; }
-    public DateTime Expiry { get; set; }
-    public bool IsRevoked { get; set; } 
-    public string UserId { get; set; }
-}
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
 
-// In Program.cs or Controller
-app.MapPost("/api/refresh", async (TokenRequest request, MyDbContext db) =>
-{
-    var existingRefreshToken = await db.RefreshTokens
-        .FirstOrDefaultAsync(r => r.Token == request.RefreshToken);
+// --- THE LOGIC ---
 
-    if (existingRefreshToken == null || 
-        existingRefreshToken.Expiry < DateTime.UtcNow || 
-        existingRefreshToken.IsRevoked)
-    {
+/// <summary>
+/// Endpoint to exchange a Refresh Token for a new Access Token.
+/// </summary>
+app.MapPost("/api/auth/refresh", async ([FromBody] RefreshRequest request) => 
+{
+    // 1. Find token in DB
+    // var storedToken = await db.RefreshTokens.FirstOrDefaultAsync(x => x.Token == request.RefreshToken);
+    
+    // Mock Validation
+    bool isValid = (request.RefreshToken == "valid_rotation_token_001");
+    bool isExpired = false;
+
+    if (!isValid || isExpired)
         return Results.Unauthorized();
-    }
 
-    // Generate NEW Access Token
-    var newAccessToken = GenerateAccessToken(existingRefreshToken.UserId);
-    
-    // Rotate Refresh Token (Optional but Recommended)
-    var newRefreshToken = GenerateRefreshToken();
-    
-    existingRefreshToken.IsRevoked = true; // Revoke old one
-    db.RefreshTokens.Add(newRefreshToken);
-    await db.SaveChangesAsync();
+    // 2. Perform ROTATION (Best Practice)
+    // var newRefreshToken = GenerateSecureToken();
+    // storedToken.Token = newRefreshToken;
+    // await db.SaveChangesAsync();
 
-    return Results.Ok(new 
-    { 
-        accessToken = newAccessToken, 
-        refreshToken = newRefreshToken.Token 
+    // 3. Generate New Short-lived Access Token
+    // var newAccessToken = JwtUtil.CreateToken(user, expiry: Minutes(15));
+    
+    return Results.Ok(new {
+        AccessToken = "new_short_lived_jwt_token",
+        RefreshToken = "next_rotation_token_002"
     });
 });
+
+app.Run();
+
+public record RefreshRequest(string AccessToken, string RefreshToken);

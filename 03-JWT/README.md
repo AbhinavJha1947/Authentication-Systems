@@ -1,54 +1,56 @@
 # 3️⃣ JWT (JSON Web Token)
 
-JWT (JSON Web Token) is an open standard (RFC 7519) that defines a compact and self-contained way for securely transmitting information between parties as a JSON object.
+JSON Web Token (JWT) is a compact, URL-safe means of representing claims to be transferred between two parties. It is the backbone of modern stateless authentication.
 
-> [!NOTE]
-> JWT is usually used **WITH** Bearer Auth scheme (`Authorization: Bearer <JWT>`).
+## 🔹 Structure Anatomy
 
-## 🔹 What it is
+A JWT is composed of three parts separated by dots (`.`):
 
-A JWT is a string comprising three parts separated by dots (`.`):
+1.  **Header**: Algorithm and token type.
+2.  **Payload**: The "Claims" (User ID, Name, Roles, Expiry).
+3.  **Signature**: Hash of Header + Payload + Secret.
 
-`HEADER.PAYLOAD.SIGNATURE`
-
-### Example
+```mermaid
+graph TD
+    JWT[JWT String] --> H[Header.base64]
+    JWT --> P[Payload.base64]
+    JWT --> S[Signature.base64]
+    
+    H -- Decodes to --> HJson[{"alg": "HS256", "typ": "JWT"}]
+    P -- Decodes to --> PJson[{"sub": "123", "role": "Admin", "exp": 1715000}]
 ```
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
-eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.
-SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+
+## 🔹 Auth Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Server
+    
+    User->>Server: POST /login (Credentials)
+    Server->>Server: Verify Credentials
+    Server->>Server: Generate JWT (Sign with private key)
+    Server-->>User: HTTP 200 (JWT in Body/Cookie)
+    User->>Server: GET /api/data + Header: Bearer <JWT>
+    Server->>Server: Verify Signature (Math operation)
+    Server->>Server: Check Expiry
+    Server-->>User: 200 OK (Data)
 ```
 
-### Structure
-1. **Header:** Algorithm & token type (e.g., HMAC SHA256, JWT).
-2. **Payload:** The claims (data) about the entity (user).
-   ```json
-   {
-     "sub": "123",
-     "role": "ADMIN",
-     "exp": 1700000000
-   }
-   ```
-3. **Signature:** Verifies that the sender of the JWT is who it says it is and to ensure that the message wasn't changed along the way.
+## 🔹 Common Pitfalls ❌
+- **Sensitive Data in Payload**: Never put passwords or PII in the payload; it's only base64 encoded and readable by anyone.
+- **Weak Secret**: Using a short secret makes the signature susceptible to brute-force attacks.
+- **Ignoring Expiry**: Failing to validate the `exp` claim allows tokens to be used forever.
 
-## 🔹 Flow
+## 🔹 Industry Best Practices ✅
+1. **Use RS256**: Asymmetric signing (Public/Private key) is more secure than HS256 (Shared Secret) in distributed systems.
+2. **Keep it Small**: Large JWTs increase latency and bandwidth usage.
+3. **Audience/Issuer Validation**: Always check `aud` and `iss` claims to prevent "confused deputy" attacks.
 
-1. **User logs in:** Client sends credentials.
-2. **Server issues JWT:** Server creates a JWT signed with a secret key (HMAC) or public/private key (RSA/ECDSA) and sends it to the client.
-3. **Client sends JWT:** Client sends the JWT in the Authorization header on every request.
-4. **Server verifies:** Server validates the signature using the key. **No database lookup is required** to verify the token itself (though you might check for revocation).
-
-## 🔹 Pros
-- **Stateless:** The server doesn't need to keep a session store. All necessary info is in the token.
-- **Fast:** Reduced latency since no DB lookup is needed for authentication.
-- **Scales very well:** Perfect for distributed systems where different services need to verify the user.
-- **Cross-domain / CORS:** easier to handle than cookies in some scenarios.
-
-## 🔹 Cons ❌
-- **Cannot revoke easily:** Since the server validates the signature mathematically, it's hard to invalidate a specific token before it expires without maintaining a blacklist (which negates the stateless benefit).
-- **Token size:** Can get large if you put too much info in the payload, increasing bandwidth usage.
-- **If stolen → valid till expiry:** Security risk if the expiration time is too long.
-
-## 🔹 Use cases
-- **Microservices:** Passing identity between services.
-- **Distributed systems:** Where centralized session storage is a bottleneck.
-- **API gateways:** Validating requests before passing them to backend services.
+## 🔹 Interview Tips 💡
+- **Q: Why is JWT called stateless?**
+  - A: Because the server doesn't need to store session data. Everything needed to identify the user is contained within the token itself.
+- **Q: How can you invalidate a JWT?**
+  - A: Since it's stateless, you can't "delete" it from the server. Common solutions include: short expiry times, or a "Deny List" in Redis.
+- **Q: What is the difference between JWS and JWE?**
+  - A: JWS (Signed) is readable but verified. JWE (Encrypted) is unreadable by humans and encrypted.

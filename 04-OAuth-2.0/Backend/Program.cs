@@ -1,33 +1,67 @@
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 
-var builder = WebApplication.CreateBuilder(args);
+namespace AuthSystems.OAuth2.Backend;
 
-builder.Services.AddAuthentication(options =>
+/// <summary>
+/// Professional OAuth 2.0 integration (Google) for .NET 8.
+/// </summary>
+public class Program
 {
-    options.DefaultScheme = "Cookies";
-    options.DefaultChallengeScheme = "Google";
-})
-.AddCookie("Cookies")
-.AddGoogle(options =>
-{
-    options.ClientId = builder.Configuration["Authentication:Google:ClientId"];
-    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-    options.CallbackPath = new PathString("/signin-google");
-});
+    public static void Main(string[] args)
+    {
+        var builder = WebApplication.CreateBuilder(args);
 
-var app = builder.Build();
+        // 1. Configure Authentication
+        builder.Services.AddAuthentication(options =>
+        {
+            options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+        })
+        .AddCookie() // Local cookie session after OAuth success
+        .AddGoogle(googleOptions =>
+        {
+            googleOptions.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "YOUR_ID";
+            googleOptions.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "YOUR_SECRET";
+            
+            // Scopes define what data we want to access
+            googleOptions.Scope.Add("profile");
+            googleOptions.Scope.Add("email");
+            
+            // Save tokens to the authentication cookie for later use
+            googleOptions.SaveTokens = true;
+        });
 
-app.UseAuthentication();
-app.UseAuthorization();
+        builder.Services.AddAuthorization();
 
-// Trigger Challenge
-app.MapGet("/login-google", async (HttpContext context) =>
-{
-    await context.ChallengeAsync("Google", new AuthenticationProperties 
-    { 
-        RedirectUri = "/" 
-    });
-});
+        var app = builder.Build();
 
-app.Run();
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        // 2. Auth Endpoints
+        app.MapGet("/api/auth/external-login", async (HttpContext context) =>
+        {
+            // Triggers redirect to Google
+            await context.ChallengeAsync(GoogleDefaults.AuthenticationScheme, new AuthenticationProperties
+            {
+                RedirectUri = "/api/auth/callback"
+            });
+        });
+
+        app.MapGet("/api/auth/callback", async (HttpContext context) =>
+        {
+            var result = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            if (result.Succeeded)
+            {
+                var claims = result.Principal.Identities.FirstOrDefault()?.Claims
+                    .Select(claim => new { claim.Type, claim.Value });
+                return Results.Ok(new { Message = "LoggedIn", User = claims });
+            }
+            return Results.BadRequest("OAuth failed");
+        });
+
+        app.Run();
+    }
+}

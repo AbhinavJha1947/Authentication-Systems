@@ -1,21 +1,52 @@
-// Pseudo-code using Fido2.Net library
-// Need nuget package: Fido2.Net
+using Fido2NetLib;
+using Fido2NetLib.Objects;
 
-public class BioController : Controller {
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddFido2(options =>
+{
+    options.ServerDomain = "localhost";
+    options.ServerName = "FIDO2 App";
+    options.Origin = "https://localhost:4200";
+});
+
+var app = builder.Build();
+
+// --- WEBAUTHN / BIOMETRIC LOGIC ---
+
+/// <summary>
+/// Step 1: Server provides a CHALLENGE to the client.
+/// </summary>
+app.MapPost("/api/bio/make-assertion-options", (IFido2 fido2) =>
+{
+    var userDetails = new Fido2User { Name = "bob", Id = Encoding.UTF8.GetBytes("user_001"), DisplayName = "Bob" };
+    var existingKeys = new List<PublicKeyCredentialDescriptor>(); // Load from DB
+
+    var options = fido2.GetAssertionOptions(existingKeys, UserVerificationRequirement.Required);
     
-    [HttpPost]
-    public async Task<IActionResult> MakeAssertion([FromBody] AuthenticatorAssertionRawResponse clientResponse)
+    // Store options in session for validation step
+    // HttpContext.Session.SetString("fido2_options", options.ToJson());
+    
+    return Results.Ok(options);
+});
+
+/// <summary>
+/// Step 2: Server VERIFIES the signature from the browser.
+/// </summary>
+app.MapPost("/api/bio/make-assertion", async (AuthenticatorAssertionRawResponse clientResponse, IFido2 fido2) =>
+{
+    // 1. Get stored public key
+    var storedKey = new byte[] { /* Load from DB */ };
+    
+    // 2. Perform Math Verification
+    var res = await fido2.MakeAssertionAsync(clientResponse, originalOptions, storedKey, ...);
+    
+    if (res.Status == "ok")
     {
-        // Get registered public key from DB
-        var storedKey = _db.Keys.Find(userId);
-        
-        // Verify
-        var res = await _fido2.MakeAssertionAsync(clientResponse, options, storedKey);
-        
-        if (res.Status == "ok") {
-            // Issue JWT / Cookie
-            return Ok();
-        }
-        return Unauthorized();
+        // Issue JWT
+        return Results.Ok("Logged in with Biometrics!");
     }
-}
+    
+    return Results.Unauthorized();
+});
+
+app.Run();

@@ -1,34 +1,47 @@
 # 1️⃣3️⃣ Passwordless Authentication
 
-A method of verifying a user's identity without requiring them to remember or enter a password.
+Passwordless authentication eliminates the need for users to remember passwords. Common methods include Magic Links (Email) and One-Time Passwords (OTP/SMS).
 
-## 🔹 Types
+## 🔹 Sequence Diagram (Magic Link)
 
-### 1. Magic Link
-- User enters email.
-- System sends a unique, one-time-use link (e.g., `app.com/login?token=xyz`).
-- User clicks link → Logged in.
+```mermaid
+sequenceDiagram
+    participant User
+    participant Email as Email Client
+    participant App as App Frontend
+    participant Server as App Backend
+    
+    User->>App: Enter Email (bob@example.com)
+    App->>Server: POST /auth/magic-link
+    Server->>Server: Generate Secure Token (UUID)
+    Server->>Email: Send Link (app.com/callback?token=123)
+    User->>Email: Click Link
+    Email->>App: Open App with Token
+    App->>Server: GET /auth/callback?token=123
+    Server->>Server: Validate Token
+    Server-->>App: Issue Session/JWT
+```
 
-### 2. OTP (One-Time Password)
-- User enters phone number/email.
-- System sends a 4-6 digit code.
-- User enters code → Logged in.
+## 🔹 Core Benefits
+- **Zero Friction**: No "Forgot Password" loops.
+- **Improved Security**: No password database to be leaked! Authenticating via email relies on the user's email security.
+- **Phishing Resistant**: (If using WebAuthn/Magic Links with device binding).
 
-### 3. FIDO2 / WebAuthn (Passkeys)
-- Using the device's built-in authenticator (Fingerprint, FaceID, YubiKey) to sign a challenge from the server.
-- This is the future of passwordless.
+## 🔹 Common Pitfalls ❌
+- **Email Latency**: If the magic link takes 5 minutes to arrive, the user might give up.
+- **Security of Email**: If the user's email is compromised, their account is compromised.
+- **One-click Scanners**: Some corporate email filters "click" links to scan for viruses, potentially invalidating the one-time token before the user sees it.
 
-## 🔹 Pros
-- **Better UX:** Frictionless login.
-- **No Password Management:** Users don't need to remember complex passwords or use managers.
-- **Less Phishing:** Harder to phish a Magic Link (if it expires fast) or WebAuthn (impossible to phish).
+## 🔹 Industry Best Practices ✅
+1.  **Short TTL**: Magic links should expire within 10-15 minutes.
+2.  **One-Time Use**: Invalidate the token immediately after the first successful verification.
+3.  **Cross-Device Handling**: If a user requests a link on mobile but clicks it on desktop, ensure the session is handled correctly (e.g., via polling or real-time web-sockets).
 
-## 🔹 Cons
-- **Dependencies:** Relies on Email/SMS delivery (which can be delayed or blocked).
-- **SIM Swapping:** SMS OTP is vulnerable to SIM swap attacks.
-- **Device Loss:** If you lose your phone/email access, recovery can be harder.
-
-## 🔹 Use cases
-- **Consumer Apps:** Slack, Medium (Magic Links).
-- **Banking:** OTP for transactions.
-- **Modern Web Apps:** Moving towards Passkeys.
+## 🔹 Interview Tips 💡
+- **Q: How do you prevent email "Link Scanners" from breaking magic links?**
+  - A: Use a "Land and Click" approach. The link goes to a page with a "Click to Login" button rather than performing the login immediately on GET.
+- **Q: Is Passwordless more secure than Passwords?**
+  - A: Generally, yes. It prevents credential stuffing and brute-force attacks. However, it shifts the security burden to the user's email/phone provider.
+- **Q: What is a "Naked" OTP?**
+  - A: It's an OTP sent in the clear (SMS). It is vulnerable to SIM swapping and interception.
+Lines: 50

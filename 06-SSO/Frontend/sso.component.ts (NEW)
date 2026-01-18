@@ -1,0 +1,49 @@
+import { Component, inject, OnInit } from '@angular/core';
+import { OAuthService } from 'angular-oauth2-oidc';
+
+@Component({
+  selector: 'app-sso-root',
+  template: `
+    <div *ngIf="user(); else loginTpl">
+      <h1>Hello, {{ user().name }}!</h1>
+      <button (click)="logout()">Logout</button>
+    </div>
+    <ng-template #loginTpl>
+      <button (click)="login()">Login with Corporate ID</button>
+    </ng-template>
+  `
+})
+export class SsoRootComponent implements OnInit {
+  private oauthService = inject(OAuthService);
+
+  // Computed state
+  user = () => this.oauthService.getIdentityClaims();
+
+  ngOnInit() {
+    this.configureSso();
+  }
+
+  private configureSso() {
+    this.oauthService.configure({
+      issuer: 'https://sso.enterprise.com',
+      clientId: 'app_dashboard_001',
+      redirectUri: window.location.origin + '/index.html',
+      scope: 'openid profile email',
+      responseType: 'code',
+      // Automatic silent refresh enables seamless SSO session maintenance
+      silentRefreshRedirectUri: window.location.origin + '/silent-refresh.html',
+      useSilentRefresh: true
+    });
+
+    // Check for existing session at the IdP
+    this.oauthService.loadDiscoveryDocumentAndTryLogin();
+  }
+
+  login() {
+    this.oauthService.initCodeFlow(); // Redirect to IdP
+  }
+
+  logout() {
+    this.oauthService.logOut(); // Global Logout
+  }
+}

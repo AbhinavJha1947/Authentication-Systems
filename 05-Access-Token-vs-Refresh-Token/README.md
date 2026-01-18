@@ -1,29 +1,55 @@
 # 5️⃣ Access Token vs Refresh Token
 
-Understanding the distinction between these two token types is crucial for secure authentication implementations, particularly with OAuth 2.0 and JWTs.
+This pattern balances security and user experience by using two different tokens with distinct lifespans and purposes.
 
-## 🔹 Access Token
+## 🔹 Sequence Diagram
 
-- **Lifespan:** Short-lived (typically 5–15 minutes).
-- **Purpose:** Used to authenticate API requests. It is sent in the `Authorization` header.
-- **Security:** Because it is sent frequently, it has a higher risk of interception. Keeping the lifespan short minimizes the window of opportunity for an attacker if the token is stolen.
+```mermaid
+sequenceDiagram
+    participant App
+    participant AuthServer
+    participant API
+    
+    App->>AuthServer: login credentials
+    AuthServer-->>App: Access Token (exp 15m) + Refresh Token (exp 7d)
+    
+    App->>API: request data (Access Token valid)
+    API-->>App: 200 OK
+    
+    Note over App: 15 minutes pass
+    
+    App->>API: request data (Access Token expired)
+    API-->>App: 401 Unauthorized
+    
+    App->>AuthServer: POST /refresh (Refresh Token)
+    AuthServer->>AuthServer: Validate Refresh Token in DB
+    AuthServer-->>App: New Access Token (exp 15m)
+    
+    App->>API: request data (New Access Token)
+    API-->>App: 200 OK
+```
 
-## 🔹 Refresh Token
+## 🔹 Token Characteristics
 
-- **Lifespan:** Long-lived (days, months, or even years).
-- **Purpose:** Used **ONLY** to acquire a new Access Token from the Authorization Server when the current Access Token expires.
-- **Security:** Stored more securely (e.g., HTTPOnly cookie) and only sent to the dedicated `/token` endpoint, not every API call.
+| Feature | Access Token | Refresh Token |
+| :--- | :--- | :--- |
+| **Lifespan** | Very Short (5-15 mins) | Long (days/weeks) |
+| **Storage** | Memory / Secure Context | HttpOnly Cookie (Best) |
+| **Usage** | Every API Request | Once per expiry |
+| **Damage if Leaked** | Low (expires soon) | High (needs revocation) |
 
-## 🔹 Why is this needed?
+## 🔹 Common Pitfalls ❌
+- **Infinite Refresh**: Never allowing refresh tokens to expire can lead to indefinite access if a device is stolen.
+- **Storing in LocalStorage**: Refresh tokens are high-value targets; keeping them in `localStorage` is risky.
+- **No Revocation System**: Not having a way to "Blacklist" or delete a refresh token when a user changes their password.
 
-1. **Security / Damage Control:** If an **Access Token** leaks, it's only valid for a few minutes. By the time an attacker tries to use it extensively, it might have already expired.
-2. **User Experience:** The **Refresh Token** allows the user to stay logged in ("Remember Me") without having to re-enter credentials every 15 minutes. The app silently refreshes the session in the background.
-3. **Revocation:** You can revoke a Refresh Token server-side (blocking future access), whereas stateless Access Tokens (like JWTs) cannot be easily revoked until they expire.
+## 🔹 Industry Best Practices ✅
+1.  **Refresh Token Rotation**: Issue a *new* refresh token every time one is used. This detects if two separate clients are using the same token (potential theft).
+2.  **Absolute Expiry**: Set an absolute limit (e.g., 30 days) after which the user *must* log in manually.
+3.  **Binding**: Bind the refresh token to the user's specific device or IP to prevent use on other machines.
 
-## 🔹 Typical Flow
-1. User logs in → Server returns `Access Token` + `Refresh Token`.
-2. App uses `Access Token` to fetch data.
-3. 10 minutes later, `Access Token` expires (API returns 401).
-4. App sends `Refresh Token` to `/refresh-token` endpoint.
-5. Server verifies `Refresh Token`, issues **new** `Access Token` (and optionally a new `Refresh Token`).
-6. App retries the failed request with the new `Access Token`.
+## 🔹 Interview Tips 💡
+- **Q: Why not just have a long-lived Access Token?**
+  - A: Short-lived access tokens limit the window of opportunity for an attacker if a token is intercepted. It also allows for nearly instant logout (by revoking the refresh token).
+- **Q: What is "Token Rotation"?**
+  - A: It's the practice of replacing the refresh token with a new one on every use. If an old one is reused, the server knows a breach occurred and can invalidate all tokens for that user.

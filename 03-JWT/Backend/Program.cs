@@ -1,72 +1,69 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.IdentityModel.Tokens.Jwt; // Added missing using
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Add Authentication Services
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+// --- JWT CONFIGURATION ---
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+var secretKey = Encoding.UTF8.GetBytes("Your-Very-Long-And-Secure-Secret-Key-32-Chars!");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = "https://myapp.com",
-        ValidAudience = "https://myapp.com",
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes("SuperSecretKey12345678901234567890")) // > 256 bits
-    };
-});
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = "https://auth.company.com",
+            ValidAudience = "https://api.company.com",
+            IssuerSigningKey = new SymmetricSecurityKey(secretKey),
+            ClockSkew = TimeSpan.Zero // Remove default 5 mins buffer
+        };
+    });
 
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// 2. Enable Middleware
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/me", (ClaimsPrincipal user) =>
+// --- LOGIN ENDPOINT (Token Generation) ---
+app.MapPost("/api/auth/login", (LoginRequest request) =>
 {
-    return $"Hello, {user.Identity?.Name}";
-})
-.RequireAuthorization();
+    // 1. Mock Validation
+    if (request.User != "admin" || request.Pass != "pass") 
+        return Results.Unauthorized();
 
-app.MapPost("/login", (LoginModel model) =>
-{
-    if (model.Username == "user" && model.Password == "pass")
+    // 2. Prepare Claims
+    var claims = new[]
     {
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, "user1"),
-            new Claim(JwtRegisteredClaimNames.Email, "user@example.com"),
-        };
+        new Claim(JwtRegisteredClaimNames.Sub, "user_001"),
+        new Claim(JwtRegisteredClaimNames.Email, "admin@company.com"),
+        new Claim(ClaimTypes.Role, "SuperAdmin"),
+        new Claim("tier", "premium") // Custom claim
+    };
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("SuperSecretKey12345678901234567890"));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+    // 3. Create Token
+    var key = new SymmetricSecurityKey(secretKey);
+    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var token = new JwtSecurityToken(
-            issuer: "https://myapp.com",
-            audience: "https://myapp.com",
-            claims: claims,
-            expires: DateTime.Now.AddMinutes(30),
-            signingCredentials: creds
-        );
+    var token = new JwtSecurityToken(
+        issuer: "https://auth.company.com",
+        audience: "https://api.company.com",
+        claims: claims,
+        expires: DateTime.UtcNow.AddMinutes(30),
+        signingCredentials: creds
+    );
 
-        return Results.Ok(new { token = new JwtSecurityTokenHandler().WriteToken(token) });
-    }
-    return Results.Unauthorized();
+    return Results.Ok(new { Token = new JwtSecurityTokenHandler().WriteToken(token) });
 });
 
 app.Run();
 
-public record LoginModel(string Username, string Password);
+public record LoginRequest(string User, string Pass);
